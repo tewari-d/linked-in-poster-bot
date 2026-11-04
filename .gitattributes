@@ -1,0 +1,4 @@
+# Shell scripts run on the phone (Termux) and the git hook run in sh; Windows line endings would break them.
+*.sh text eol=lf
+deploy/termux/* text eol=lf
+.githooks/* text eol=lf
