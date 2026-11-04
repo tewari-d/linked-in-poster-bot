@@ -22,6 +22,18 @@ function createMockProvider() {
       text: paragraphs.join('\n\n'),
       hashtags: ['#SAP', '#MockDraft', '#Testing'],
       imagePrompt: 'Portrait infographic, aspect ratio 4:5, 1080 x 1350 pixels. Bold headline at the top: "Mock Draft". Subtitle: "Pipeline test without Gemini". Central diagram: three glossy 3D cards labeled "Topic", "Draft" and "Post", connected by glowing arrows. Side panel with three takeaways and simple icons: "Clear hook", "Accurate details", "One idea". Modern vibrant tech style, soft glow, large clean sans-serif text, deep blue circuit-like gradient background. No logos, brand marks or trademarked artwork.',
+      infographic: {
+        label: 'Mock draft · pipeline test',
+        headline: 'Mock draft, real pipeline',
+        subtitle: 'Written offline, without Gemini',
+        layout: 'list',
+        points: [
+          { icon: 'target', title: 'A hook that stops the scroll', note: 'The first line works on its own' },
+          { icon: 'shield-check', title: 'Accurate technical details', note: 'No invented features, numbers or dates' },
+          { icon: 'list-checks', title: 'One idea, short lines', note: 'The core points in a scannable list' },
+        ],
+        question: 'What would you add to this?',
+      },
     };
   }
 

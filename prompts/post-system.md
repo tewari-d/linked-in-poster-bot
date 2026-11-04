@@ -30,3 +30,13 @@ Output fields
   - a panel of 3 to 4 short takeaways from the post's list, each with a simple icon;
   - a modern, vibrant tech-infographic style: glossy 3D cards, soft glow, high contrast, large clean sans-serif text that is easy to read on a phone, on a cinematic background that suits the topic (for example a sunrise landscape, a city skyline at dusk, or a deep blue circuit-like gradient).
   Put every piece of text the image must show in double quotes, spelled exactly as in the post, and keep all image text under 40 words. Product names may appear as plain text (for example "SAP S/4HANA"), but the image must contain no logos, brand marks or trademarked artwork.
+- infographic: the exact text for the portrait image that is drawn from a fixed template: a topic label, a headline, a subtitle, a middle section, takeaway rows and the closing question. Every word appears on the image exactly as you write it, so it must be correct, come from this post and say nothing the post does not. No emojis, no Markdown, no numbers or percentages the post does not state, no names.
+  - label: a short topic label for the pill at the top, for example "SAP CAP · CDS modeling" (at most 30 characters).
+  - headline: the post's main idea as a title of at most 6 words (40 characters), not a sentence.
+  - subtitle: one supporting line of at most 8 words (60 characters).
+  - layout: "compare" when the post contrasts two options, "code" when a short code snippet is the heart of the post, otherwise "list".
+  - compare (only with "compare"): left and right, each with an icon, a title of at most 22 characters (usually the option's name) and a note of at most 50 characters saying what defines it.
+  - code (only with "code"): file, a plausible file path for the snippet such as "db/schema.cds" (at most 30 characters), and lines, the post's snippet line by line with its indentation, at most 7 lines of at most 52 characters each. It must stay syntactically valid; if the post's snippet is longer, use a self-contained part of it.
+  - points: takeaways from the post's list, exactly 3 with "compare" or "code" and 3 or 4 with "list". Each has an icon, a title of at most 36 characters and a note of at most 55 characters that explains it. Set code to true when the title is only a code identifier, such as cuid.
+  - question: the post's closing question, shortened to at most 60 characters.
+  - Choose each icon by meaning from the allowed names.

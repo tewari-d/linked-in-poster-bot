@@ -10,14 +10,10 @@ class TelegramError extends Error {
 
 // The bot token is part of every URL, so URLs are never put into errors or logs.
 function createTelegramApi({ token, fetchFn = fetch }) {
-  async function call(method, params = {}) {
+  async function request(method, init) {
     let res;
     try {
-      res = await fetchFn(`${API_BASE}/bot${token}/${method}`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(params),
-      });
+      res = await fetchFn(`${API_BASE}/bot${token}/${method}`, { method: 'POST', ...init });
     } catch (err) {
       throw new Error(`Cannot reach Telegram (${method}): ${err.cause?.code ?? err.message}`, { cause: err });
     }
@@ -26,6 +22,22 @@ function createTelegramApi({ token, fetchFn = fetch }) {
       throw new TelegramError({ method, code: body?.error_code ?? res.status, description: body?.description ?? res.statusText });
     }
     return body.result;
+  }
+
+  const call = (method, params = {}) => request(method, {
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(params),
+  });
+
+  // Uploads `document.bytes` as a file. A file, not a photo, so Telegram keeps the image sharp:
+  // its file_id is what Post later downloads and uploads to LinkedIn.
+  function sendDocument({ document, ...params }) {
+    const form = new FormData();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined) form.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+    }
+    form.append('document', new Blob([document.bytes], { type: document.mimeType }), document.fileName);
+    return request('sendDocument', { body: form });
   }
 
   async function downloadFile(fileId) {
@@ -47,6 +59,7 @@ function createTelegramApi({ token, fetchFn = fetch }) {
     getMe: () => call('getMe'),
     getUpdates: (params) => call('getUpdates', params),
     sendMessage: (params) => call('sendMessage', params),
+    sendDocument,
     answerCallbackQuery: (params) => call('answerCallbackQuery', params),
     editMessageReplyMarkup: (params) => call('editMessageReplyMarkup', params),
     deleteMessage: (params) => call('deleteMessage', params),

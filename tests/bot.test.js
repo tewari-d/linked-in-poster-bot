@@ -32,6 +32,7 @@ function fakeApi() {
     calls,
     sent: () => calls.filter((c) => c.method === 'sendMessage').map((c) => c.params),
     sendMessage: record('sendMessage', () => ({ message_id: nextMessageId++ })),
+    sendDocument: record('sendDocument', () => ({ message_id: nextMessageId++, document: { file_id: 'DRAWN1', file_name: 'd.png', file_size: 4096 } })),
     answerCallbackQuery: record('answerCallbackQuery', true),
     editMessageReplyMarkup: record('editMessageReplyMarkup', true),
     deleteMessage: record('deleteMessage', true),
@@ -46,7 +47,7 @@ function fakeLinkedInApi() {
   };
 }
 
-function setup({ publishImpl, failGeneration = false, now = '2026-11-05T04:00:00Z', withLinkedIn = false, dryRun = true } = {}) {
+function setup({ publishImpl, failGeneration = false, now = '2026-11-05T04:00:00Z', withLinkedIn = false, dryRun = true, drawImage = null, provider = createMockProvider() } = {}) {
   const api = fakeApi();
   const store = memoryStore();
   const generateCalls = [];
@@ -54,7 +55,7 @@ function setup({ publishImpl, failGeneration = false, now = '2026-11-05T04:00:00
   const makeDraft = async (args) => {
     generateCalls.push(args);
     if (failGeneration) throw new Error('quota reached');
-    return createDraft({ ...args, epochDate: '2026-11-01', bank, prompts, provider: createMockProvider(), store });
+    return createDraft({ ...args, epochDate: '2026-11-01', bank, prompts, provider, store });
   };
   const publisher = {
     publish: publishImpl ?? (async ({ draft }) => {
@@ -66,8 +67,18 @@ function setup({ publishImpl, failGeneration = false, now = '2026-11-05T04:00:00
   const clock = () => new Date(now);
   const linkedin = withLinkedIn ? createLinkedInAuth({ linkedinApi: fakeLinkedInApi(), store, clock }) : null;
   // 04:00 UTC is 09:30 in India.
-  const bot = createBot({ api, store, makeDraft, publisher, linkedin, config, log: () => {}, clock });
+  const bot = createBot({ api, store, makeDraft, publisher, linkedin, drawImage, config, log: () => {}, clock });
   return { api, store, bot, published, generateCalls };
+}
+
+// Just enough of a PNG for the bot: the signature and an IHDR chunk with the size.
+function fakePng({ width = 1080, height = 1350 } = {}) {
+  const png = Buffer.alloc(24);
+  Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]).copy(png, 0);
+  png.write('IHDR', 12, 'ascii');
+  png.writeUInt32BE(width, 16);
+  png.writeUInt32BE(height, 20);
+  return png;
 }
 
 const chat = (id) => ({ chat: { id, type: 'private' }, from: { id } });
@@ -333,6 +344,91 @@ test('the image idea is the model\'s prompt as written, with no name or signatur
   assert.match(imageMessage, /portrait 4:5/);
   assert.ok(imageMessage.includes(msg.escapeHtml(latest(store).imagePrompt)));
   assert.doesNotMatch(imageMessage, /Test Owner|signature/);
+});
+
+test('a drawn draft is two messages: the post, then the image file carrying the buttons', async () => {
+  const drawn = [];
+  const { api, store, bot, published } = setup({ drawImage: async ({ draft }) => { drawn.push(draft.id); return fakePng(); } });
+  await bot.handleUpdate(text('/draft'));
+  const draft = latest(store);
+
+  assert.deepEqual(drawn, [draft.id]);
+  const uploads = api.calls.filter((c) => c.method === 'sendDocument').map((c) => c.params);
+  assert.equal(uploads.length, 1);
+  const [upload] = uploads;
+  assert.equal(upload.chat_id, String(OWNER));
+  assert.equal(upload.document.fileName, `${draft.id}.png`);
+  assert.equal(upload.document.mimeType, 'image/png');
+  assert.match(upload.caption, /The image for the post above/);
+  assert.deepEqual(buttonsOf(upload).map((b) => b.callback_data), [`post:${draft.id}`, `skip:${draft.id}`, `regen:${draft.id}`]);
+  assert.deepEqual(draft.image, { fileId: 'DRAWN1', kind: 'document', mimeType: 'image/png', fileName: 'd.png', fileSize: 4096, width: 1080, height: 1350, drawn: true });
+
+  // The progress note goes once the draft is there, leaving just the post and the image.
+  const [note, post, ...rest] = api.sent();
+  assert.match(note.text, /Writing the draft/);
+  assert.match(post.text, /Draft for/);
+  assert.deepEqual(rest, []);
+  assert.ok(api.calls.some((c) => c.method === 'deleteMessage' && c.params.message_id === 1));
+  assert.notEqual(draft.telegram.controlMessageId, draft.telegram.postMessageId);
+
+  await bot.handleUpdate(tap(`post:${draft.id}`));
+  assert.deepEqual(published, [draft.id]);
+  assert.equal(latest(store).status, 'POSTED');
+});
+
+test('when drawing fails, the draft still goes out with the image idea and the reason', async () => {
+  const { api, store, bot } = setup({ drawImage: async () => { throw new Error('"x" is too long for the image'); } });
+  await bot.handleUpdate(text('/draft'));
+  const draft = latest(store);
+
+  assert.equal(draft.status, 'SENT');
+  assert.equal(draft.image, undefined);
+  assert.ok(!api.calls.some((c) => c.method === 'sendDocument'));
+  const controls = lastText(api);
+  assert.match(controls, /Image idea/);
+  assert.match(controls, /couldn.t draw an image \(&quot;x&quot;|couldn.t draw an image \("x"/);
+
+  await bot.handleUpdate(tap(`post:${draft.id}`));
+  assert.match(lastText(api), /No image attached/, 'Post asks before going out without an image');
+});
+
+test('image text that failed validation is not drawn, and the owner is told why', async () => {
+  const badImage = {
+    name: 'bad-image',
+    generateDraft: async (args) => ({ ...(await createMockProvider().generateDraft(args)), infographic: { layout: 'list', points: [] } }),
+  };
+  let calls = 0;
+  const { api, bot } = setup({ provider: badImage, drawImage: async () => { calls += 1; return fakePng(); } });
+  await bot.handleUpdate(text('/draft'));
+  assert.equal(calls, 0);
+  assert.match(lastText(api), /couldn.t draw an image: the label is empty/);
+});
+
+test('the owner\'s own image replaces the drawn one', async () => {
+  const { api, store, bot } = setup({ drawImage: async () => fakePng() });
+  await bot.handleUpdate(text('/draft'));
+  await bot.handleUpdate(file('image/png'));
+
+  const draft = latest(store);
+  assert.equal(draft.image.fileId, 'F1');
+  assert.equal(draft.image.drawn, undefined);
+  assert.match(lastText(api), /replaces the image I drew/);
+});
+
+test('/help describes the drawn image only when the bot draws images', async () => {
+  const drawing = setup({ drawImage: async () => fakePng() });
+  await drawing.bot.handleUpdate(text('/help'));
+  assert.match(lastText(drawing.api), /check the image I drew/);
+
+  const manual = setup();
+  await manual.bot.handleUpdate(text('/help'));
+  assert.match(lastText(manual.api), /make an image with the image idea/);
+});
+
+test('the image caption stays within Telegram\'s 1024-character limit', () => {
+  const caption = msg.drawnImageCaption({ warnings: ['x'.repeat(2000)] });
+  assert.equal(caption.length, 1024);
+  assert.match(msg.drawnImageCaption({ warnings: ['text is short'] }), /⚠️ text is short$/);
 });
 
 test('the Telegram preview shows the AI disclaimer between the text and the hashtags, as on LinkedIn', () => {

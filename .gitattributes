@@ -2,3 +2,5 @@
 *.sh text eol=lf
 deploy/termux/* text eol=lf
 .githooks/* text eol=lf
+# Bundled fonts for the drawn images; line-ending conversion would corrupt them.
+*.ttf binary

@@ -82,6 +82,21 @@ function imagePromptMessage({ draft, warnings = [] }) {
   return lines.join('\n');
 }
 
+// Telegram allows at most 1024 characters under an image.
+const CAPTION_MAX = 1024;
+
+// The caption of the drawn image, which also carries the buttons. Plain text (no parse_mode), so
+// cutting it to the caption limit can never break an HTML entity.
+function drawnImageCaption({ warnings = [] }) {
+  const lines = [
+    '🖼 The image for the post above.',
+    'Prefer your own? Send it here as a File and it replaces this one.',
+    ...warnings.map((warning) => `⚠️ ${warning}`),
+  ];
+  const caption = lines.join('\n');
+  return caption.length <= CAPTION_MAX ? caption : `${caption.slice(0, CAPTION_MAX - 1)}…`;
+}
+
 function publishedMessage({ result, draft }) {
   if (result.dryRun) {
     const image = result.imageBytes
@@ -127,12 +142,12 @@ function connectMessage({ connection }) {
   ].join('\n');
 }
 
-function helpMessage({ sendTime, timezone, dryRun }) {
+function helpMessage({ sendTime, timezone, dryRun, drawsImages = false }) {
   return [
     `👋 I write one SAP post draft for you every day at <b>${sendTime}</b> (${escapeHtml(timezone)}).`,
     '',
-    '1. Read the draft and make an image with the image idea.',
-    '2. Send the image here (as a File for best quality).',
+    drawsImages ? '1. Read the draft and check the image I drew for it.' : '1. Read the draft and make an image with the image idea.',
+    drawsImages ? '2. Prefer your own image? Send it here (as a File for best quality) and it replaces mine.' : '2. Send the image here (as a File for best quality).',
     '3. ✅ Post publishes it, ⏭ Skip drops it, 🔄 Regenerate writes a new version.',
     '',
     '/draft: create today\'s draft now (or /draft YYYY-MM-DD to preview another day\'s topic)',
@@ -157,6 +172,7 @@ module.exports = {
   parseCallback,
   postMessage,
   imagePromptMessage,
+  drawnImageCaption,
   publishedMessage,
   uncertainMessage,
   linkedinLine,

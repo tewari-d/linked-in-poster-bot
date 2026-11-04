@@ -18,6 +18,8 @@
     "secrets:check": "node src/cli/checkSecrets.js"
   },
   "dependencies": {
-    "@google/genai": "^2.32.0"
+    "@google/genai": "^2.32.0",
+    "@resvg/resvg-wasm": "^2.6.2",
+    "opentype.js": "^2.0.0"
   }
 }

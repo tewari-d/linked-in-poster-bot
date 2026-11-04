@@ -1,6 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { normalizeDraft, validateDraft, countEmojis } = require('../src/generation/draftSchema');
+const {
+  DRAFT_SCHEMA, IMAGE_TEXT_LIMITS, normalizeDraft, normalizeInfographic, infographicProblems, validateDraft, countEmojis,
+} = require('../src/generation/draftSchema');
+const { ICON_NAMES } = require('../src/image/icons');
 const { renderTemplate } = require('../src/generation/prompts');
 
 const validRaw = () => ({
@@ -67,6 +70,58 @@ test('a long infographic image prompt with quoted on-image text is accepted', ()
   assert.ok(imagePrompt.length > 1200 && imagePrompt.length < 2000);
   const { errors } = validateDraft(normalizeDraft({ ...validRaw(), imagePrompt }));
   assert.deepEqual(errors, []);
+});
+
+const imageText = () => ({
+  label: 'ABAP · Clean code',
+  headline: '🚀 String templates  beat CONCATENATE',
+  subtitle: 'Cleaner ABAP in three habits',
+  layout: 'list',
+  points: [
+    { icon: 'braces', title: 'Embed expressions', note: 'Variables go straight into the text' },
+    { icon: 'no-such-icon', title: 'Format inline ✅', note: 'Options sit inside the braces' },
+    { icon: 'circle-check', title: 'Fewer helpers', note: 'One readable line' },
+  ],
+  question: '💬 Do you still use CONCATENATE?',
+});
+
+test('image text is cleaned: no emojis or double spaces, unknown icons replaced', () => {
+  const info = normalizeInfographic(imageText());
+  assert.equal(info.headline, 'String templates beat CONCATENATE');
+  assert.equal(info.points[1].title, 'Format inline');
+  assert.equal(info.points[1].icon, 'circle-check');
+  assert.equal(info.question, 'Do you still use CONCATENATE?');
+  assert.equal(info.points[0].code, false);
+  assert.deepEqual(infographicProblems(info), []);
+});
+
+test('code lines keep their indentation; blank edge lines and tabs are tidied', () => {
+  const info = normalizeInfographic({ ...imageText(), layout: 'code', code: { file: 'db/schema.cds', lines: ['', 'entity Books {\n\ttitle : String;  ', '}', ''] } });
+  assert.deepEqual(info.code.lines, ['entity Books {', '  title : String;', '}']);
+  assert.deepEqual(infographicProblems(info), []);
+});
+
+test('image text that would not fit, or a missing section, is reported', () => {
+  const tooLong = normalizeInfographic({ ...imageText(), headline: 'x'.repeat(IMAGE_TEXT_LIMITS.HEADLINE_MAX + 1) });
+  assert.match(infographicProblems(tooLong).join(), /headline is 49 characters/);
+  const noCompare = normalizeInfographic({ ...imageText(), layout: 'compare' });
+  assert.match(infographicProblems(noCompare).join(), /left title is empty/);
+  const longCode = normalizeInfographic({ ...imageText(), layout: 'code', code: { file: 'a.js', lines: Array(9).fill('x();') } });
+  assert.match(infographicProblems(longCode).join(), /9 lines/);
+  const twoPoints = normalizeInfographic({ ...imageText(), points: imageText().points.slice(0, 2) });
+  assert.match(infographicProblems(twoPoints).join(), /3-4 takeaways, got 2/);
+  assert.deepEqual(infographicProblems(null), ['no image text came back']);
+});
+
+test('a percentage in the image text is flagged too', () => {
+  const info = { ...imageText(), subtitle: 'Saves 30% of effort' };
+  const { warnings } = validateDraft(normalizeDraft({ ...validRaw(), infographic: info }));
+  assert.ok(warnings.some((w) => w.includes('percentage')));
+});
+
+test('the schema asks for the image text, with icons limited to the bundled set', () => {
+  assert.ok(DRAFT_SCHEMA.required.includes('infographic'));
+  assert.deepEqual(DRAFT_SCHEMA.properties.infographic.properties.points.items.properties.icon.enum, ICON_NAMES);
 });
 
 test('renderTemplate fails on a placeholder without a value', () => {

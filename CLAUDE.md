@@ -2,7 +2,7 @@
 
 Guidance for Claude Code working in this repo. Read this first in every session. Keep it current: update **Status** and **Decisions** whenever something changes, with the date.
 
-_Last updated: 2026-11-04 (live on the laptop; new post style + AI disclaimer; M4 phone tooling ready, owner setting up the M30)._
+_Last updated: 2026-11-04 (live on the laptop; new post style + AI disclaimer; the bot now draws each image; M4 phone tooling ready, owner setting up the M30)._
 
 ---
 
@@ -10,17 +10,17 @@ _Last updated: 2026-11-04 (live on the laptop; new post style + AI disclaimer; M
 
 A personal automation that drafts one **SAP-technical LinkedIn post** every morning at **09:00 IST**, sends it to the owner on **Telegram** for approval, and publishes it to the owner's **LinkedIn profile** only when they tap **Post**.
 
-- Text and image prompt come from the **Gemini API (free tier)**.
-- The image is made **manually** by the owner and sent to the bot in Telegram.
+- Text, image text and image prompt come from the **Gemini API (free tier)**, in one call.
+- The **bot draws the image** itself from a fixed infographic template with Gemini's exact text (`src/image/`; no AI image model). The owner can still send their own image instead.
 - Everything runs on the **laptop first** (end-to-end rehearsal), then on an **old Samsung Galaxy M30 at home** (Termux + Node.js), with a JSON file for storage.
 - **Nothing needs to be reachable from the internet.** The bot long-polls Telegram, and the LinkedIn OAuth redirect goes to `localhost` (a server on 127.0.0.1 only), with a paste-the-address fallback.
 
 ### Daily flow
 1. The **timer** (checked every 30s) sees it's 09:00 IST, or later up to the 12:00 catch-up cutoff, with no draft delivered today.
 2. **Topic picker** chooses today's topic from the topic bank by date (§8).
-3. **Gemini** returns `hook, text, hashtags, imagePrompt` as structured JSON. It is validated locally.
-4. The **bot** sends two messages: the post, then the image idea with buttons **✅ Post / ⏭ Skip / 🔄 Regenerate**.
-5. The owner sends an image (ideally as a File). It attaches to the waiting draft, and the bot replies with fresh buttons.
+3. **Gemini** returns `hook, text, hashtags, imagePrompt, infographic` as structured JSON. It is validated locally.
+4. The **bot** sends **two messages**: the post, then the drawn image as a PNG file carrying the buttons **✅ Post / ⏭ Skip / 🔄 Regenerate**, with a 2-line caption. The image is attached to the draft. If the image can't be drawn, the second message is the image idea plus the reason, with the same buttons. (One message isn't possible: a caption allows only 1024 characters and posts are about 1,100–1,800 with the disclaimer and hashtags.)
+5. Optional: the owner sends their own image (ideally as a File). It replaces the drawn one, and the bot replies with fresh buttons.
 6. **Post** → download the image from Telegram → upload to LinkedIn → create the post → reply with the link. With `DRY_RUN` on (the default) it is a **dry run**.
 7. **Skip** marks the draft skipped. **Regenerate** writes a new version of the same topic. Any new draft **expires** the previous waiting one.
 
@@ -54,12 +54,13 @@ A personal automation that drafts one **SAP-technical LinkedIn post** every morn
 | Date | Decision |
 |---|---|
 | 2026-11-04 | Human approval of each post via chat buttons. One SAP-technical post per day. |
-| 2026-11-04 | **Runtime: Node.js ≥ 22, plain JavaScript, CommonJS** (owner's conventions, `cap-fiori-engineering` skill). No framework. Dependencies: `@google/genai` only. |
+| 2026-11-04 | **Runtime: Node.js ≥ 22, plain JavaScript, CommonJS** (owner's conventions, `cap-fiori-engineering` skill). No framework. Dependencies: `@google/genai`, plus `@resvg/resvg-wasm` and `opentype.js` for drawing images (2026-11-04; both pure JS/WASM). |
 | 2026-11-04 | **Messaging: Telegram bot** (created via @BotFather), replacing WhatsApp. Meta refused a developer account (the owner rarely uses Facebook). Bot API is called with plain `fetch`; **long polling**, so no public URL. No 24h window, templates or per-message cost. Messaging stays behind a module, so WhatsApp could be added later. |
 | 2026-11-04 | **Host: laptop for the end-to-end rehearsal, then Samsung Galaxy M30** (Android 10 / One UI 2, Termux). BTP was dropped (owner doesn't want LinkedIn credentials there). iPhone 6 ruled out (iOS 12, background suspension). |
 | 2026-11-04 | **Storage: `data/state.json`** (atomic writes, retried on Windows file locks). No database. |
 | 2026-11-04 | **LLM: Gemini API free tier, model `gemini-3-flash-preview`** (owner's pick from `npm run models`). Preview models can be withdrawn at short notice; switch via `GEMINI_MODEL`. |
-| 2026-11-04 | **Image: manual.** The owner sends it in Telegram. An AI image provider (with a free quota) may come later. |
+| 2026-11-04 | **Image: manual.** The owner sends it in Telegram. *(Replaced the same day, see the next row.)* |
+| 2026-11-04 | **Image: drawn by the bot from a template** (owner: "the looks are perfect, go ahead"). Gemini writes the image text in the same call as the post (`infographic`: label, headline, subtitle, layout `compare`/`code`/`list`, 3–4 takeaways with icons, the question). `src/image/infographic.js` builds an SVG; `renderer.js` measures with `opentype.js` and rasterises with `@resvg/resvg-wasm` to a 1080×1350 PNG. Bundled fonts: Inter, JetBrains Mono (OFL); icons: Lucide (ISC), copied into `src/image/`. Colour theme rotates daily (5 themes). Sent as a Telegram **document** (keeps the PNG sharp), so its file_id becomes `draft.image` and the Post path is unchanged. **Any failure falls back to the manual image idea; it never blocks a draft.** `AUTO_IMAGE=false` turns it off. Each image takes about 0.1–0.5 s and 150 MB of memory (RSS) on the laptop. |
 | 2026-11-04 | **Send time 09:00 Asia/Kolkata, catch-up until 12:00.** A polled due-check, not a cron, so a sleeping laptop or rebooted phone still sends the day's draft. |
 | 2026-11-04 | **`DRY_RUN` is on unless it is exactly `false`.** `DRY_RUN=false` needs `LINKEDIN_CLIENT_ID` and `LINKEDIN_CLIENT_SECRET`. |
 | 2026-11-04 | **Topic bank is JSON** (`data/topics.json`), rotated by date. |
@@ -68,7 +69,7 @@ A personal automation that drafts one **SAP-technical LinkedIn post** every morn
 | 2026-11-04 | **Uncertain outcome = status `UNKNOWN`.** A timeout, a network drop after connecting, or a 5xx on create-post (or a `POSTING` draft found at startup) asks the owner: **It's on LinkedIn** (`seen`) / **Not there** (`notposted` → back to `SENT`). Failures before create-post, 4xx, and DNS or connection-refused errors are definite and return the draft to `SENT`. |
 | 2026-11-04 | **Token expiry reminder** comes with the daily draft during the token's last 7 days. None in dry run before LinkedIn was ever connected. |
 
-**Decided 2026-11-04 (owner): images stay manual for now.** After seeing the A/B test below: "clearly the images are not useful". Don't build automatic images unless the owner brings it up again. The research is kept here for that day; option A (AI picture without text + text written by the bot) is the one to revisit.
+**AI image models: rejected 2026-11-04** after the A/B test below (owner: "clearly the images are not useful"). The owner then approved the template images that the bot draws itself (Decisions table above). The research is kept for reference.
 
 AI image provider research (must cost ₹0), 2026-11-04:
 - **Gemini/Imagen image models are paid only.** The official pricing page lists Free Tier "Not available" for Nano Banana 2, 2 Lite, Pro, 2.1 and 2.5 Flash Image. `gemini-2.5-flash-image` shuts down on 2027-03-15.
@@ -93,7 +94,7 @@ AI image provider research (must cost ₹0), 2026-11-04:
   - **klein 9B:** 3–6 s, layout and style good, large text mostly right. **Every image had 2–4 spelling errors** ("Freestye", "Freetsyle", "Full Ontdl", "Maintenance Maintenante"). Short text helped but didn't fix it.
   - **Phoenix:** worse. Garbled headline, a LinkedIn logo it was told not to draw, and it printed meta text ("Portrait Infographic", "1080 Pix").
   - Conclusion: free models can't spell reliably, so letting them write the on-image text means a wrong word under the owner's name most days. Best idea if revisited: **AI draws the picture with no text; the bot writes the text onto it with a real font** (pure-JS/WASM renderer, e.g. `@resvg/resvg-wasm` plus a bundled OFL font).
-  - The Cloudflare values in `.env` are unused by the code. The test images are in `dist/image-test/` (gitignored, not in the phone bundle).
+  - The Cloudflare values in `.env` are unused by the code. The test images (AI models, template samples, and a real Gemini draft drawn by the template) are in `dist/image-test/` (gitignored, not in the phone bundle).
 
 ---
 
@@ -117,7 +118,9 @@ AI image provider research (must cost ₹0), 2026-11-04:
 | `seen` | On an `UNKNOWN` draft: the owner saw it on LinkedIn → `POSTED` (no URL) |
 | `notposted` | On an `UNKNOWN` draft: not on LinkedIn → `SENT` with fresh buttons, so Post can be tapped again |
 
-- **Images:** a photo (compressed by Telegram; the bot suggests sending as a File) or a JPG/PNG document, ≤ 20 MB (the Bot API download limit). It attaches to the latest `SENT` draft. Sending again replaces it. Only the Telegram `file_id` is stored; the file is downloaded at Post time.
+- **Drawn image:** sent with each draft via `sendDocument` (multipart upload), with the control keyboard and a plain-text caption (`drawnImageCaption`, cut to 1024 characters). That message is the draft's `controlMessageId`. It is stored as `draft.image` with `drawn: true`, so ✅ Post publishes straight away. If the image text failed validation, or drawing or upload failed, the control message is the usual image idea plus "I couldn't draw an image (…)". When an image is drawn, the image idea isn't shown at all (owner wanted fewer messages, 2026-11-04).
+- **Progress notes** ("✍️ Writing the draft…", "🔄 Writing a new version…") are deleted once the draft has arrived, or once generation has failed.
+- **Own images:** a photo (compressed by Telegram; the bot suggests sending as a File) or a JPG/PNG document, ≤ 20 MB (the Bot API download limit). It attaches to the latest `SENT` draft, replacing the drawn one (the bot says so). Sending again replaces it. Only the Telegram `file_id` is stored; the file is downloaded at Post time.
 - **Stale buttons** are removed when a draft is posted, skipped or replaced (`editMessageReplyMarkup`). Status checks guard them anyway.
 - **Formatting:** `parse_mode: HTML`, with every dynamic value passed through `escapeHtml`. The image prompt is in `<code>`, so it copies with a tap.
 
@@ -167,7 +170,8 @@ Telegram Bot API, the Gemini free tier, the LinkedIn API, and owned hardware are
 7. `npm start` → `/linkedin` in Telegram → open the link in the laptop browser → Allow → the bot confirms. Then set `DRY_RUN=false` for the first real post.
 
 ### Images
-- Prompts ask for a portrait 4:5 (1080×1350) infographic with exact quoted text taken from the post (§6). **Never SAP logos or trademarks**; product names as plain text are fine.
+- The bot draws a portrait 4:5 (1080×1350) PNG from Gemini's `infographic` text (§6). The image prompt (for a hand-made image) asks for the same format, with exact quoted text taken from the post. **Never SAP logos or trademarks**; product names as plain text are fine.
+- Drawing needs no network and no API. Fonts are loaded from `src/image/fonts/`, never system fonts, so the image is identical on the laptop and the phone. Text that doesn't fit throws, which triggers the image-idea fallback.
 
 ---
 
@@ -209,16 +213,21 @@ These live in `prompts/post-system.md`. Keep that file and this list in sync.
 - Hook ≤ 150 chars, one line. 800–1500 chars. 3–5 hashtags, always `#SAP` plus specific established tags.
 - No Markdown and no `-`/`*` bullets (LinkedIn shows them literally). No AI clichés.
 - **Image prompt (owner request, 2026-11-04, modelled on a sample infographic):** a portrait 4:5 (1080×1350) infographic of the post: a headline of ≤ 6 words, a subtitle, a labelled diagram of the actual concept, 3–4 takeaway cards with icons, glossy 3D style on a cinematic background. All on-image text in double quotes, under 40 words. Product names as plain text are OK; **no logos or trademarked artwork**. 120–220 words; `IMAGE_PROMPT_MAX` is 2000 chars.
-- **No signature on images** (owner, 2026-11-04: tried one with their name, "no need"). Don't add the owner's name to image prompts.
+- **Image text (`infographic`, drawn by the bot, 2026-11-04):** every word appears exactly as written, so the same accuracy rules apply: from the post only, nothing new, no emojis (stripped anyway; the fonts have none), no Markdown, no unstated numbers or %, no names.
+  - label ≤ 30, headline ≤ 6 words / 40, subtitle ≤ 8 words / 60, question ≤ 60 characters.
+  - layout `compare` (two sides: title ≤ 22, note ≤ 50), `code` (file ≤ 30, ≤ 7 valid lines of ≤ 52), or `list`.
+  - takeaways: 3 (or 3–4 with `list`), title ≤ 36, note ≤ 55, an icon from the 53 bundled names, and `code: true` for an identifier title.
+  - These are the targets in the prompt. The hard caps in `IMAGE_TEXT_LIMITS` are a little higher, and a test proves text at the caps still fits.
+- **No signature on images** (owner, 2026-11-04: tried one with their name, "no need"). Don't add the owner's name to image prompts or image text.
 - **AI disclaimer on every post** (owner-approved wording, 2026-11-04): `🤖 AI Generated Content, curated by a human. Spot something off? Tell me in the comments 👇`. The bot adds it, not Gemini, so it is exact: between the text and the hashtags on LinkedIn (`buildCommentary`) and in the Telegram preview (`postMessage`). Default in `config.js`; `POST_DISCLAIMER` in `.env` overrides it (empty turns it off).
 
 ## 7. State (`data/state.json`, gitignored)
 
 - `drafts[]` (last 60 kept):
   - `id` (`YYYY-MM-DD-xxxxxxxx`), `date`, `category`, `subtopic`, `format`
-  - content: `hook`, `text`, `hashtags`, `imagePrompt`
+  - content: `hook`, `text`, `hashtags`, `imagePrompt`, `infographic` (the image text; `null` when it failed validation)
   - lifecycle: `status`, `provider`, `createdAt`, `sentAt`, `decidedAt`, `error`
-  - Telegram: `telegram: { postMessageId, controlMessageId }`, `image: { fileId, kind, mimeType, width?, height?, fileName?, fileSize }`
+  - Telegram: `telegram: { postMessageId, controlMessageId }` (the control message is the image when one was drawn), `image: { fileId, kind, mimeType, width?, height?, fileName?, fileSize, drawn? }` (`drawn: true` for the bot's own image)
   - outcome: `dryRun`, `linkedinUrl`
 - `lastAutoRunDate`: the timer runs once per day.
 - `telegramOffset`
@@ -244,13 +253,17 @@ src/
   time.js                   dateInZone, timeInZone, daysBetween, assertIsoDate, assertHhMm
   topics/rotation.js        loadTopicBank, interleave, pickForDate
   generation/prompts.js     loadPrompts, renderTemplate, buildRequest
-  generation/draftSchema.js DRAFT_SCHEMA, LIMITS, normalizeDraft, validateDraft
+  generation/draftSchema.js DRAFT_SCHEMA, LIMITS, IMAGE_TEXT_LIMITS, normalizeDraft (+ normalizeInfographic), validateDraft, infographicProblems
   generation/geminiProvider.js  createGeminiProvider (no retries), listGenerateModels
   generation/mockProvider.js    offline drafts (tests, --mock)
   jobs/createDraft.js       pick → prompt → generate → validate → save; expires older pending drafts
   store/fileStore.js        atomic state.json load/save with Windows lock retry
   store/queue.js            serial task queue
-  messaging/telegramApi.js  Bot API via fetch (token never logged), downloadFile, privateChatsFrom
+  messaging/telegramApi.js  Bot API via fetch (token never logged), sendDocument (multipart), downloadFile, privateChatsFrom
+  image/infographic.js      buildInfographicSvg (pure; layouts compare/code/list), themeForDate, THEMES
+  image/renderer.js         createInfographicRenderer: font metrics (opentype.js) + resvg-wasm → PNG; frees WASM memory
+  image/icons.js            53 Lucide icons (ICON_NAMES = Gemini's enum), copied in
+  image/fonts/              Inter Medium/Bold/ExtraBold, JetBrains Mono Medium/Bold + OFL licences (binary in .gitattributes)
   bot/bot.js                commands, buttons, images, daily run, owner lock
   bot/messages.js           texts, keyboards, HTML escaping, callback parsing
   bot/schedule.js           isDailyRunDue (pure), startScheduler
@@ -266,13 +279,14 @@ src/
 deploy/termux/setup.sh, update.sh, start-services   phone-side install/update/boot (must stay LF; .gitattributes)
 prompts/post-system.md, prompts/post-request.md
 data/topics.json
-tests/*.test.js             node:test, all external APIs faked (69 tests)
+tests/*.test.js             node:test, all external APIs faked (103 tests; infographic.test.js renders one real PNG)
 ```
 
 **Config** (`.env`, see `.env.example`). Real environment variables override `.env`, which tests and smoke runs rely on.
 - `GEMINI_API_KEY`, `GEMINI_MODEL`
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_CHAT_ID`
 - `TIMEZONE`, `SEND_TIME`, `CATCHUP_CUTOFF`, `TOPIC_EPOCH_DATE`, `DATA_DIR`, `DRY_RUN`
+- `AUTO_IMAGE` (on unless exactly `false`; then images are made by hand from the image idea)
 - `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`. Optional: `LINKEDIN_REDIRECT_URI` (default `http://localhost:8765/auth/linkedin/callback`) and `LINKEDIN_API_VERSION` (default `202610`; bump it yearly).
 
 ## 10. Engineering conventions
@@ -314,7 +328,9 @@ tests/*.test.js             node:test, all external APIs faked (69 tests)
 npm start                     run the bot (Telegram + daily timer). Ctrl+C stops it
 npm start -- --mock           same, with offline drafts (no Gemini quota used)
 npm test                      unit tests (no network)
-npm run draft [-- --mock] [-- --date YYYY-MM-DD]   generate a draft in the terminal only (never sent)
+npm run draft [-- --mock] [-- --date YYYY-MM-DD] [-- --image file.png]   generate a draft in the terminal only (never sent);
+                              --image also draws its picture to that file. It saves to DATA_DIR and expires a waiting draft
+                              there, so for previews set DATA_DIR to a temporary folder
 npm run models                list Gemini models for GEMINI_API_KEY
 npm run phone:bundle [-- --with-secrets]   pack the bot for the phone (dist/linkedin-poster.tgz)
 npm run secrets:check [-- --all]   no keys/token in staged files (or in everything git would upload); also the pre-commit hook
@@ -345,7 +361,7 @@ Stop the normal bot first (409 rule). Afterwards close that window and run `npm 
 ## 14. Status
 
 > **Next session: start here.**
-> 1. `npm test` (80 tests).
+> 1. `npm test` (103 tests).
 > 2. Ask where the owner is in the phone setup (§5 steps 1–8). Help with whatever step they're on; Termux errors usually come with the exact message.
 > 3. Once the phone runs: a reboot test, then confirm the next 09:00 draft came from the phone. **Never start the bot on the laptop again** (409; the phone owns `state.json`).
 - [x] 2026-11-04: Project defined. Decisions recorded.
@@ -368,5 +384,22 @@ Stop the normal bot first (409 rule). Afterwards close that window and run `npm 
   - `npm run secrets:check -- --all`, and `README.md`.
 
   Verified: the full scan of the 56 upload files is clean, and the hook blocked a test commit in a throwaway repo. 84 tests. CLAUDE.md mentions the employer laptop and OneDrive; trim them if the repo goes public.
+- [x] 2026-11-04: **Images drawn by the bot** (Decisions). AI image models were tested first and rejected for misspelling every image (Cloudflare FLUX.2 klein / Phoenix). Template approved by the owner from samples. Built with 18 new tests (102). Verified:
+  - startup with a fake token;
+  - `npm run draft -- --mock --image`;
+  - **one real Gemini call accepted the new schema** and chose `compare` for the 2026-11-05 topic, with accurate image text;
+  - secrets scan clean (67 files).
+
+  On the phone, `setup.sh`'s `npm test` renders a real PNG, which proves WASM works there. `assets/` PDFs don't describe this yet.
+- [x] 2026-11-04: **Owner tried it live** (`/draft` → drawn image → Post): "liked the quality and everything".
+  - At the owner's request, a draft is now **2 messages**: the post, then the image with the buttons. The third (control) message is gone, and progress notes are deleted. 103 tests.
+  - That live test ran in the **old timer-test cmd window** (`DATA_DIR=%TEMP%\linkedin-timer-test`, `DRY_RUN=true`, test `SEND_TIME`), so Post was a dry run. Owner told to restart `npm start` in a fresh cmd window.
+  - The 2-message version isn't tried live yet.
+- [x] 2026-11-04: **`MAINTENANCE.md`** (owner request): a dated checklist of what expires. Keep it current after each renewal or change.
+  - LinkedIn access expires 2027-01-03 08:50 IST; the bot reminds from 2026-12-27.
+  - The topic list runs out 2027-01-14 and repeats from 2027-01-15 (the posted CAP topic returns on 2027-01-18). Plan: **replace** the subtopics, don't append. `TOPIC_EPOCH_DATE` stays.
+  - Node 22 end of life 2027-04-30, if the phone runs it.
+  - Bump `LINKEDIN_API_VERSION` 202610 by 2027-09-30.
+  - Optional: key rotation, and deleting the Cloudflare token.
 - [ ] **M4 (owner, on the phone):** §5 steps 1–8, then a reboot test and a 09:00 morning check from the phone.
 - [ ] M5: polish (log rotation, more tests as needed).

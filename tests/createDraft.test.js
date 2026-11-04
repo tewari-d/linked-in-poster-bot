@@ -46,6 +46,22 @@ test('a new draft expires the previous pending one', async () => {
   assert.equal(drafts.find((d) => d.id === second.draft.id).status, 'GENERATED');
 });
 
+test('a draft carries its image text; unusable image text is dropped but the post is kept', async () => {
+  const { deps } = setup();
+  const good = await createDraft({ ...deps, date: '2026-11-05' });
+  assert.equal(good.draft.infographic.layout, 'list');
+  assert.deepEqual(good.imageProblems, []);
+
+  const badImage = {
+    name: 'bad-image',
+    generateDraft: async (args) => ({ ...(await createMockProvider().generateDraft(args)), infographic: { layout: 'list', points: [] } }),
+  };
+  const bad = await createDraft({ ...deps, provider: badImage, date: '2026-11-06' });
+  assert.equal(bad.draft.infographic, null);
+  assert.ok(bad.imageProblems.some((p) => p.includes('headline is empty')));
+  assert.equal(deps.store.load().drafts.at(-1).id, bad.draft.id, 'the post itself was saved');
+});
+
 test('the request prompt has no unfilled placeholders', async () => {
   const { deps } = setup();
   let seenPrompt;

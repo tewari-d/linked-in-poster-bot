@@ -37,6 +37,8 @@ function getConfig() {
     catchupCutoff: env.CATCHUP_CUTOFF || '12:00',
     // Anything except an explicit "false" keeps posting simulated, so a typo can't publish for real.
     dryRun: env.DRY_RUN !== 'false',
+    // The bot draws each draft's image unless this is exactly "false" (then the owner makes it by hand).
+    autoImage: env.AUTO_IMAGE !== 'false',
     topicEpochDate: env.TOPIC_EPOCH_DATE || '2026-11-01',
     // Unset uses the default; set but empty turns the line off.
     postDisclaimer: (env.POST_DISCLAIMER ?? DEFAULT_POST_DISCLAIMER).trim(),

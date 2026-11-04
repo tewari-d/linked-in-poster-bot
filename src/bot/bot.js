@@ -22,7 +22,8 @@ function extractImage(message) {
 }
 
 // `linkedin` (the connection from linkedin/auth.js) is null while the LinkedIn app keys are not in .env.
-function createBot({ api, store, makeDraft, publisher, linkedin = null, config, log = console.log, clock = () => new Date() }) {
+// `drawImage({ draft })` returns the draft's infographic as PNG bytes; null means images are made by hand.
+function createBot({ api, store, makeDraft, publisher, linkedin = null, drawImage = null, config, log = console.log, clock = () => new Date() }) {
   const ownerId = String(config.telegram.ownerChatId);
   const { timezone, sendTime, catchupCutoff } = config;
 
@@ -63,6 +64,40 @@ function createBot({ api, store, makeDraft, publisher, linkedin = null, config, 
     updateDraft(draftId, (d) => { d.telegram = { ...d.telegram, controlMessageId: sent.message_id }; });
   }
 
+  // Draws the image and sends it as a file carrying the Post/Skip/Regenerate buttons, so a draft is
+  // just two messages. Returns the sent message and what to store, or why there is no image: a
+  // failure here never blocks the draft, which then goes out with the manual image idea.
+  async function sendDrawnImage({ draft, warnings, imageProblems }) {
+    if (!draft.infographic) return { problem: `I couldn't draw an image: ${imageProblems.join('; ')}. Make one with the image idea.` };
+    try {
+      const png = await drawImage({ draft });
+      const sent = await api.sendDocument({
+        chat_id: ownerId,
+        document: { bytes: png, fileName: `${draft.id}.png`, mimeType: 'image/png' },
+        caption: msg.drawnImageCaption({ warnings }),
+        reply_markup: msg.controlKeyboard(draft.id),
+      });
+      const doc = sent.document;
+      return {
+        sent,
+        image: {
+          fileId: doc.file_id,
+          kind: 'document',
+          mimeType: 'image/png',
+          fileName: doc.file_name,
+          fileSize: doc.file_size ?? png.length,
+          // Width and height sit at fixed offsets in a PNG's header.
+          width: png.readUInt32BE(16),
+          height: png.readUInt32BE(20),
+          drawn: true,
+        },
+      };
+    } catch (err) {
+      log(`Drawing the image for ${draft.id} failed: ${err.message}`);
+      return { problem: `I couldn't draw an image (${err.message}). Make one with the image idea.` };
+    }
+  }
+
   async function deliverDraft({ date, extra = '', retry = { action: ACTION.DRAFT, arg: date } }) {
     const previous = store.load().drafts.filter((d) => d.status === 'SENT');
     let result;
@@ -77,15 +112,31 @@ function createBot({ api, store, makeDraft, publisher, linkedin = null, config, 
     // createDraft has expired the previous pending draft; take its buttons away too.
     await clearButtons(...previous.map((d) => d.telegram?.controlMessageId));
 
-    const { draft, warnings } = result;
+    const { draft, warnings, imageProblems = [] } = result;
     const post = await send(msg.postMessage({ draft, disclaimer: config.postDisclaimer }));
-    const controls = await send(msg.imagePromptMessage({ draft, warnings }), { reply_markup: msg.controlKeyboard(draft.id) });
+    const drawn = drawImage ? await sendDrawnImage({ draft, warnings, imageProblems }) : {};
+    const controls = drawn.sent ?? await send(
+      msg.imagePromptMessage({ draft, warnings: drawn.problem ? [...warnings, drawn.problem] : warnings }),
+      { reply_markup: msg.controlKeyboard(draft.id) },
+    );
     updateDraft(draft.id, (d) => {
       d.status = 'SENT';
       d.sentAt = nowIso();
       d.telegram = { postMessageId: post.message_id, controlMessageId: controls.message_id };
+      if (drawn.image) d.image = drawn.image;
     });
     log(`Sent draft ${draft.id}`);
+  }
+
+  // A "working on it" note for the seconds Gemini takes, deleted once the result is in the chat.
+  async function withProgressNote(text, work) {
+    const note = await send(text);
+    try {
+      return await work();
+    } finally {
+      await api.deleteMessage({ chat_id: ownerId, message_id: note.message_id })
+        .catch((err) => log(`Could not delete the progress note: ${err.message}`));
+    }
   }
 
   async function onDraftRequest(date) {
@@ -94,8 +145,7 @@ function createBot({ api, store, makeDraft, publisher, linkedin = null, config, 
       await send(`The draft for ${msg.formatDay(date)} is already waiting above. Tap 🔄 Regenerate on it for a new version.`);
       return;
     }
-    await send('✍️ Writing the draft…');
-    await deliverDraft({ date });
+    await withProgressNote('✍️ Writing the draft…', () => deliverDraft({ date }));
   }
 
   async function notPending({ draft, verb, messageId }) {
@@ -208,13 +258,12 @@ function createBot({ api, store, makeDraft, publisher, linkedin = null, config, 
   async function onRegenerate({ draftId, messageId }) {
     const draft = findDraft(draftId);
     if (draft?.status !== 'SENT') return notPending({ draft, verb: 'regenerate', messageId });
-    await send('🔄 Writing a new version…');
     // The old draft keeps its buttons until the new one exists, so a failed call loses nothing.
-    await deliverDraft({
+    await withProgressNote('🔄 Writing a new version…', () => deliverDraft({
       date: draft.date,
       extra: `Take a clearly different angle from an earlier draft on the same topic, whose first line was: "${draft.hook}". Do not reuse that first line.`,
       retry: { action: ACTION.REGENERATE, arg: draftId },
-    });
+    }));
   }
 
   async function onImage(message) {
@@ -235,15 +284,17 @@ function createBot({ api, store, makeDraft, publisher, linkedin = null, config, 
     updateDraft(draft.id, (d) => { d.image = image; });
     await clearButtons(draft.telegram?.controlMessageId);
     const size = image.width ? ` (${image.width}×${image.height})` : '';
+    const replaced = draft.image?.drawn ? ' It replaces the image I drew.' : '';
     const quality = image.kind === 'photo' ? '\nIt came as a photo, so Telegram compressed it. For full quality, send it as a File.' : '';
-    await sendControls({ draftId: draft.id, text: `🖼 Image attached${size}.${quality}\nTap ✅ Post when ready.` });
+    await sendControls({ draftId: draft.id, text: `🖼 Image attached${size}.${replaced}${quality}\nTap ✅ Post when ready.` });
   }
 
   async function onStatus() {
     const latest = store.load().drafts.at(-1);
     const lines = [];
     if (latest) {
-      const extras = [latest.dryRun && 'dry run', latest.image && 'image attached'].filter(Boolean);
+      const image = latest.image && (latest.image.drawn ? 'drawn image attached' : 'your image attached');
+      const extras = [latest.dryRun && 'dry run', image].filter(Boolean);
       lines.push(`Latest draft (${msg.formatDay(latest.date)}): ${msg.escapeHtml(latest.subtopic)}`);
       lines.push(`Status: <b>${msg.STATUS_LABEL[latest.status]}</b>${extras.length ? ` (${extras.join(', ')})` : ''}`);
     } else {
@@ -274,7 +325,7 @@ function createBot({ api, store, makeDraft, publisher, linkedin = null, config, 
     switch (command) {
       case '/start':
       case '/help':
-        return send(msg.helpMessage({ sendTime, timezone, dryRun: config.dryRun }));
+        return send(msg.helpMessage({ sendTime, timezone, dryRun: config.dryRun, drawsImages: Boolean(drawImage) }));
       case '/draft': {
         const date = arg ?? today();
         try {

@@ -17,6 +17,7 @@ const { createLinkedInPublisher } = require('./publish/linkedinPublisher');
 const { createLinkedInApi } = require('./linkedin/linkedinApi');
 const { createLinkedInAuth } = require('./linkedin/auth');
 const { startCallbackServer } = require('./linkedin/callbackServer');
+const { createInfographicRenderer } = require('./image/renderer');
 const { createBot } = require('./bot/bot');
 const { runPolling } = require('./bot/polling');
 const { startScheduler } = require('./bot/schedule');
@@ -30,6 +31,20 @@ const BOT_COMMANDS = [
 ];
 
 const log = (...args) => console.log(new Date().toISOString(), ...args);
+
+// The bot still works without image drawing (the owner gets the image idea and sends an image),
+// so a broken renderer is logged, not fatal.
+async function createImageDrawer({ enabled }) {
+  if (!enabled) return null;
+  try {
+    const renderer = createInfographicRenderer();
+    await renderer.ready();
+    return ({ draft }) => renderer.draw({ spec: draft.infographic, date: draft.date, seed: draft.id });
+  } catch (err) {
+    log(`Image drawing is off: ${err.message}`);
+    return null;
+  }
+}
 
 function linkedinStatus(linkedin) {
   if (!linkedin) return 'LinkedIn: not set up (LINKEDIN_CLIENT_ID / LINKEDIN_CLIENT_SECRET not in .env).';
@@ -67,12 +82,14 @@ async function main() {
   const publisher = config.dryRun
     ? createDryRunPublisher({ api })
     : createLinkedInPublisher({ linkedinApi, telegramApi: api, auth: linkedin, disclaimer: config.postDisclaimer });
-  const bot = createBot({ api, store, makeDraft, publisher, linkedin, config, log });
+  const drawImage = await createImageDrawer({ enabled: config.autoImage });
+  const bot = createBot({ api, store, makeDraft, publisher, linkedin, drawImage, config, log });
 
   const me = await api.getMe();
   await api.setMyCommands({ commands: BOT_COMMANDS }).catch((err) => log(`setMyCommands: ${err.message}`));
   log(`Bot @${me.username} running with ${provider.name}. Daily draft at ${config.sendTime} ${config.timezone} (catch-up until ${config.catchupCutoff}). Mode: ${config.dryRun ? 'dry run' : 'LIVE (posts to LinkedIn)'}. State: ${store.filePath}`);
   log(linkedinStatus(linkedin));
+  log(`Images: ${drawImage ? 'drawn by the bot' : 'made by hand from the image idea'}.`);
   if (linkedin) {
     // Through the queue like every other state change, since it writes the token to state.json.
     await startCallbackServer({ redirectUri: config.linkedin.redirectUri, onRedirect: (params) => queue.run(() => bot.onLinkedInRedirect(params)), log });
