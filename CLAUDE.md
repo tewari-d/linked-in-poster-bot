@@ -68,7 +68,32 @@ A personal automation that drafts one **SAP-technical LinkedIn post** every morn
 | 2026-11-04 | **Uncertain outcome = status `UNKNOWN`.** A timeout, a network drop after connecting, or a 5xx on create-post (or a `POSTING` draft found at startup) asks the owner: **It's on LinkedIn** (`seen`) / **Not there** (`notposted` → back to `SENT`). Failures before create-post, 4xx, and DNS or connection-refused errors are definite and return the draft to `SENT`. |
 | 2026-11-04 | **Token expiry reminder** comes with the daily draft during the token's last 7 days. None in dry run before LinkedIn was ever connected. |
 
-**Open:** AI image provider (later; must have a free API quota).
+**Decided 2026-11-04 (owner): images stay manual for now.** After seeing the A/B test below: "clearly the images are not useful". Don't build automatic images unless the owner brings it up again. The research is kept here for that day; option A (AI picture without text + text written by the bot) is the one to revisit.
+
+AI image provider research (must cost ₹0), 2026-11-04:
+- **Gemini/Imagen image models are paid only.** The official pricing page lists Free Tier "Not available" for Nano Banana 2, 2 Lite, Pro, 2.1 and 2.5 Flash Image. `gemini-2.5-flash-image` shuts down on 2027-03-15.
+- **Best ₹0 option: Cloudflare Workers AI.** 10,000 neurons/day free, resetting 00:00 UTC. Over the limit, Workers Free is **blocked, not billed** (pricing page updated 2026-10-20). REST: `POST https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/run/{model}`, `Authorization: Bearer <token>` (Workers AI Read + Edit). Approximate cost of one ~1024×1280 portrait:
+  - `@cf/black-forest-labs/flux-2-klein-9b`: ≈1,420 neurons, ~7/day. Multipart, 256–1920 px, 4 fixed steps.
+  - `flux-2-klein-4b`: ≈130, ~70/day.
+  - `@cf/leonardo/phoenix-1.0`: ≈2,900, ~3/day. Claims "coherent text"; max 2048 px, 25 steps by default.
+  - `flux-2-dev`: ~2/day.
+  - `flux-1-schnell`: cheap, weak at text.
+
+  BFL says FLUX.2 handles "infographics with complex typography"; klein is a distilled version.
+- Rejected: Hugging Face ($0.10/month in free credit), Pollinations (third party, watermark unless registered, terms unclear), BFL/fal/Replicate/Ideogram/OpenAI (paid).
+- Plan if ever approved:
+  - generate the image right after the draft;
+  - send it to Telegram as a file, so its file_id becomes `draft.image` and the Post path is unchanged;
+  - add a 🎨 New image button;
+  - the owner's own image still overrides it;
+  - on failure or quota, fall back to today's image idea.
+
+  Keep on-image text short (headline + 3–4 labels) for the free models. A/B test klein-9b vs phoenix on a real prompt first.
+- **A/B test done 2026-11-04.** Owner's Cloudflare account and token are in `.env` as `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. Test: the 2026-11-05 draft's real image prompt at 1024×1280, then a short-text version on klein with two seeds.
+  - **klein 9B:** 3–6 s, layout and style good, large text mostly right. **Every image had 2–4 spelling errors** ("Freestye", "Freetsyle", "Full Ontdl", "Maintenance Maintenante"). Short text helped but didn't fix it.
+  - **Phoenix:** worse. Garbled headline, a LinkedIn logo it was told not to draw, and it printed meta text ("Portrait Infographic", "1080 Pix").
+  - Conclusion: free models can't spell reliably, so letting them write the on-image text means a wrong word under the owner's name most days. Best idea if revisited: **AI draws the picture with no text; the bot writes the text onto it with a real font** (pure-JS/WASM renderer, e.g. `@resvg/resvg-wasm` plus a bundled OFL font).
+  - The Cloudflare values in `.env` are unused by the code. The test images are in `dist/image-test/` (gitignored, not in the phone bundle).
 
 ---
 
