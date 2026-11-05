@@ -2,7 +2,7 @@
 
 Guidance for Claude Code working in this repo. Read this first in every session. Keep it current: update **Status** and **Decisions** whenever something changes, with the date.
 
-_Last updated: 2026-11-04 (live on the laptop; new post style + AI disclaimer; the bot now draws each image; M4 phone tooling ready, owner setting up the M30)._
+_Last updated: 2026-11-05 (the bot runs on the phone: code from GitHub, `.env` by QR code, LinkedIn reconnected there; see §5)._
 
 ---
 
@@ -181,6 +181,13 @@ Exynos 7904 (arm64), **Android 10 / One UI 2**. That is older than the Android 1
 
 **Decided 2026-11-04 (owner):** code goes over **USB as a `.tgz` bundle** (not GitHub, not SSH). **No healthchecks.io alert for now.**
 
+**Changed 2026-11-05: the company laptop can't use USB**, so the phone was set up without the bundle (steps 5–6 below were skipped):
+- **Code:** cloned from the private repo `tewari-d/linked-in-poster-bot` (remote `git`, branch `master`). `pkg install git gh` → `gh auth login` (HTTPS, device code entered at github.com/login/device on the laptop) → `gh repo clone tewari-d/linked-in-poster-bot ~/linkedin-poster`. gh's token (scope `repo`) stays on the phone in `~/.config/gh/`; it can be revoked at GitHub → Settings → Applications.
+- **`.env`:** shown on the laptop screen as a QR code (the 7 set lines, no Cloudflare keys), made by a throwaway script that printed key names only, then deleted. Scanned with **Binary Eye** (F-Droid; the Samsung camera can't open text QR codes) and pasted into `cat > .env`. Nothing secret went over a network or a cloud. Binary Eye keeps a scan history, so that scan must be deleted.
+- **`state.json` was not moved.** The phone started fresh, and LinkedIn was reconnected on the phone with `/linkedin` and the paste route. The laptop's `data/state.json` still holds the old token (valid until 2027-01-03).
+- Termux lessons: an unfinished `pkg upgrade` made Node fail with `CANNOT LINK EXECUTABLE "node": cannot locate symbol …`; a full `pkg upgrade -y` fixed it (`termux-change-repo` if a mirror lags). A missing `/` after `~` created a folder literally named `~linkedin-poster`, and `mv ./~linkedin-poster linkedin-poster` fixed it. Volume-Down acts as Ctrl, and Volume-Up + Q shows the extra-keys row.
+- **Wake lock (found 2026-11-05):** the first phone draft arrived at 09:05, not 09:00, and only after the owner sent `/status`. The `/status` reply came *before* the draft, and both go through the serial queue, so the daily run hadn't started yet: slow APIs are ruled out. The cause was the wake lock: the one `setup.sh` takes is dropped when the last Termux session `exit`s, which setup's own "type exit, reopen" step does. With the CPU asleep the 30 s timer stalls until a message wakes the phone. Fixed by tapping **Acquire wakelock** in Termux's notification; it then shows "Release wakelock". Rules: **never `exit` Termux**, and after a reboot check that the notification shows "Release wakelock", which proves Termux:Boot ran. Not done yet: making `setup.sh` tell the owner to take the lock after reopening.
+
 Phone prep (owner):
 1. Optional: factory reset, so it's a dedicated device. Connect to home Wi-Fi. No SIM needed.
 2. Install **F-Droid** (f-droid.org), then **Termux** and **Termux:Boot** from F-Droid. **They must come from the same source**: the signature keys differ per source. Open Termux:Boot once.
@@ -196,7 +203,9 @@ Deploy (scripts in `deploy/termux/`, verified on the laptop: bundle builds with 
 7. `bash ~/linkedin-poster/deploy/termux/setup.sh`. It installs `nodejs-lts` and `termux-services` (checks Node ≥ 22), runs `npm ci --omit=dev`, runs the tests, fixes CRLF in `.env`, and creates service `linkedin-bot`, **left off via a `down` file**. Its run script waits 20 s and then runs `node src/app.js`, so a restart loop is gentle. svlogger writes the log to `$PREFIX/var/log/sv/linkedin-bot/current`. It also installs `~/.termux/boot/start-services` (wake lock + `start-services.sh`, per the Termux:Boot README).
 8. `exit`, reopen Termux, `sv-enable linkedin-bot`, `tail -f $PREFIX/var/log/sv/linkedin-bot/current`. Then `/status` in Telegram, and a reboot test.
 
-Updates later: laptop `npm run phone:bundle` (code only) → USB → Download folder → `bash ~/linkedin-poster/deploy/termux/update.sh`. It refuses a bundle that contains `.env` or `state.json`, stops the bot, unpacks, runs `npm ci`, runs the tests (stays stopped if they fail), then starts the bot. Control: `sv up|down|status linkedin-bot`.
+**Updates now (git):** the owner commits and pushes from the laptop. Then, in Termux: `cd ~/linkedin-poster && sv down linkedin-bot && git pull && npm ci --omit=dev --no-audit --no-fund && npm test && sv up linkedin-bot`. If the tests fail, the bot stays stopped. `update.sh` doesn't support git yet; adding a git mode to it was offered.
+
+Updates from a machine with USB: laptop `npm run phone:bundle` (code only) → USB → Download folder → `bash ~/linkedin-poster/deploy/termux/update.sh`. It refuses a bundle that contains `.env` or `state.json`, stops the bot, unpacks, runs `npm ci`, runs the tests (stays stopped if they fail), then starts the bot. Control: `sv up|down|status linkedin-bot`.
 
 Other rules:
 - No tunnel is needed: Telegram is long-polled. LinkedIn renewal from the owner's own phone uses the paste-the-address route (the callback server listens on the M30's own 127.0.0.1).
@@ -362,8 +371,8 @@ Stop the normal bot first (409 rule). Afterwards close that window and run `npm 
 
 > **Next session: start here.**
 > 1. `npm test` (103 tests).
-> 2. Ask where the owner is in the phone setup (§5 steps 1–8). Help with whatever step they're on; Termux errors usually come with the exact message.
-> 3. Once the phone runs: a reboot test, then confirm the next 09:00 draft came from the phone. **Never start the bot on the laptop again** (409; the phone owns `state.json`).
+> 2. **The bot runs on the phone (live since 2026-11-05). Never start it on the laptop again** (409; the phone owns `state.json`).
+> 3. If not yet confirmed: the reboot test passed, and the 2026-11-05 09:00 draft came from the phone.
 - [x] 2026-11-04: Project defined. Decisions recorded.
 - [x] 2026-11-04: **M1**: topic rotation, prompts, Gemini provider, validation, file store, CLIs. First real draft via `gemini-3-flash-preview` was technically accurate.
 - [x] 2026-11-04: Telegram bot created by the owner; token and owner chat id in `.env`.
@@ -401,5 +410,9 @@ Stop the normal bot first (409 rule). Afterwards close that window and run `npm 
   - Node 22 end of life 2027-04-30, if the phone runs it.
   - Bump `LINKEDIN_API_VERSION` 202610 by 2027-09-30.
   - Optional: key rotation, and deleting the Cloudflare token.
-- [ ] **M4 (owner, on the phone):** §5 steps 1–8, then a reboot test and a 09:00 morning check from the phone.
+- [x] 2026-11-05: **M4: the phone is the server.** The bundle was verified first: it unpacked clean with production packages only, and 103 tests passed. USB was blocked, so the phone got its code from GitHub, `.env` by QR code, and a fresh LinkedIn login (§5).
+  - `setup.sh` passed. The service is on.
+  - `/status` shows LIVE and LinkedIn connected.
+  - The new token expires about **2027-01-04** (60 days from 2026-11-05; `/status` shows the exact date). Reminders start about 2026-12-28.
+- [ ] M4 checks: the reboot test, and the first 09:00 draft from the phone (2026-11-05).
 - [ ] M5: polish (log rotation, more tests as needed).
