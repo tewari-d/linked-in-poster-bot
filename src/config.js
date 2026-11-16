@@ -49,6 +49,8 @@ function getConfig() {
       apiKey: env.GEMINI_API_KEY,
       model: env.GEMINI_MODEL,
     },
+    // `npm run draft -- --local` only: llama-server on the phone. 8081, because the Gita bot's server uses 8080.
+    localLlmUrl: env.LOCAL_LLM_URL || 'http://127.0.0.1:8081',
     telegram: {
       botToken: env.TELEGRAM_BOT_TOKEN,
       ownerChatId: env.TELEGRAM_OWNER_CHAT_ID,

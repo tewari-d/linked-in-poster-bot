@@ -264,6 +264,7 @@ src/
   generation/prompts.js     loadPrompts, renderTemplate, buildRequest
   generation/draftSchema.js DRAFT_SCHEMA, LIMITS, IMAGE_TEXT_LIMITS, normalizeDraft (+ normalizeInfographic), validateDraft, infographicProblems
   generation/geminiProvider.js  createGeminiProvider (no retries), listGenerateModels
+  generation/localLlmProvider.js  createLocalLlmProvider: the phone's own llama-server, same prompt + schema (test only, `draft --local`)
   generation/mockProvider.js    offline drafts (tests, --mock)
   jobs/createDraft.js       pick → prompt → generate → validate → save; expires older pending drafts
   store/fileStore.js        atomic state.json load/save with Windows lock retry
@@ -286,9 +287,10 @@ src/
   cli/draft.js, cli/models.js, cli/telegramSetup.js
   cli/phoneBundle.js        dist/linkedin-poster.tgz for the phone (--with-secrets adds .env + state.json; refuses CRLF scripts)
 deploy/termux/setup.sh, update.sh, start-services   phone-side install/update/boot (must stay LF; .gitattributes)
+deploy/termux/local-draft-test.sh   one draft with the phone's local model (own llama-server, 4096 context, port 8081)
 prompts/post-system.md, prompts/post-request.md
 data/topics.json
-tests/*.test.js             node:test, all external APIs faked (103 tests; infographic.test.js renders one real PNG)
+tests/*.test.js             node:test, all external APIs faked (107 tests; infographic.test.js renders one real PNG)
 ```
 
 **Config** (`.env`, see `.env.example`). Real environment variables override `.env`, which tests and smoke runs rely on.
@@ -296,6 +298,7 @@ tests/*.test.js             node:test, all external APIs faked (103 tests; infog
 - `TELEGRAM_BOT_TOKEN`, `TELEGRAM_OWNER_CHAT_ID`
 - `TIMEZONE`, `SEND_TIME`, `CATCHUP_CUTOFF`, `TOPIC_EPOCH_DATE`, `DATA_DIR`, `DRY_RUN`
 - `AUTO_IMAGE` (on unless exactly `false`; then images are made by hand from the image idea)
+- `LOCAL_LLM_URL` (only for `npm run draft -- --local`; default `http://127.0.0.1:8081`)
 - `LINKEDIN_CLIENT_ID`, `LINKEDIN_CLIENT_SECRET`. Optional: `LINKEDIN_REDIRECT_URI` (default `http://localhost:8765/auth/linkedin/callback`) and `LINKEDIN_API_VERSION` (default `202610`; bump it yearly).
 
 ## 10. Engineering conventions
@@ -337,7 +340,8 @@ tests/*.test.js             node:test, all external APIs faked (103 tests; infog
 npm start                     run the bot (Telegram + daily timer). Ctrl+C stops it
 npm start -- --mock           same, with offline drafts (no Gemini quota used)
 npm test                      unit tests (no network)
-npm run draft [-- --mock] [-- --date YYYY-MM-DD] [-- --image file.png]   generate a draft in the terminal only (never sent);
+npm run draft [-- --mock | --local] [-- --date YYYY-MM-DD] [-- --image file.png]   generate a draft in the terminal only (never sent);
+                              --local uses llama-server at LOCAL_LLM_URL instead of Gemini (on the phone: local-draft-test.sh);
                               --image also draws its picture to that file. It saves to DATA_DIR and expires a waiting draft
                               there, so for previews set DATA_DIR to a temporary folder
 npm run models                list Gemini models for GEMINI_API_KEY
@@ -370,7 +374,7 @@ Stop the normal bot first (409 rule). Afterwards close that window and run `npm 
 ## 14. Status
 
 > **Next session: start here.**
-> 1. `npm test` (103 tests).
+> 1. `npm test` (107 tests).
 > 2. **The bot runs on the phone (live since 2026-11-05). Never start it on the laptop again** (409; the phone owns `state.json`).
 > 3. If not yet confirmed: the reboot test passed, and the 2026-11-05 09:00 draft came from the phone.
 - [x] 2026-11-04: Project defined. Decisions recorded.
@@ -415,4 +419,10 @@ Stop the normal bot first (409 rule). Afterwards close that window and run `npm 
   - `/status` shows LIVE and LinkedIn connected.
   - The new token expires about **2027-01-04** (60 days from 2026-11-05; `/status` shows the exact date). Reminders start about 2026-12-28.
 - [ ] M4 checks: the reboot test, and the first 09:00 draft from the phone (2026-11-05).
+- [x] 2026-11-16: **POC done** (owner): posted daily for 11–12 days with one tap each. A closing post was drafted; the owner wanted it less technical and got a plain-language version.
+  - **The owner asked to claim a local LLM.** Advised against claiming what wasn't done. The suggestion was to test it for real instead.
+  - The M30 (3 GB RAM) already runs Qwen3 1.7B via llama.cpp for the Gita project (`..\LocalLLM`, repo `tewari-d/phone-hosted-llm`, server on 8080 with a 2048 context, 5.5 tokens/s).
+  - Added `draft --local` + `localLlmProvider.js` (same prompt and JSON schema via llama-server's `response_format`, thinking off) and `deploy/termux/local-draft-test.sh`.
+  - Verified on the laptop against a stand-in llama-server. 107 tests.
+  - **Not yet run on the phone.** Result to record: time, quality versus Gemini on the same topic, and any memory problems.
 - [ ] M5: polish (log rotation, more tests as needed).

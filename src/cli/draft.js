@@ -1,5 +1,6 @@
 // Generates today's draft and prints it. Sends nothing.
-// Usage: npm run draft -- [--mock] [--date YYYY-MM-DD] [--image preview.png]
+// Usage: npm run draft -- [--mock | --local] [--date YYYY-MM-DD] [--image preview.png]
+//        --local uses the phone's own model (llama-server at LOCAL_LLM_URL) instead of Gemini.
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseArgs } = require('node:util');
@@ -9,6 +10,7 @@ const { loadTopicBank } = require('../topics/rotation');
 const { loadPrompts } = require('../generation/prompts');
 const { createGeminiProvider } = require('../generation/geminiProvider');
 const { createMockProvider } = require('../generation/mockProvider');
+const { createLocalLlmProvider } = require('../generation/localLlmProvider');
 const { createFileStore } = require('../store/fileStore');
 const { createDraft } = require('../jobs/createDraft');
 const { createInfographicRenderer } = require('../image/renderer');
@@ -29,6 +31,7 @@ async function main() {
   const { values } = parseArgs({
     options: {
       mock: { type: 'boolean', default: false },
+      local: { type: 'boolean', default: false },
       date: { type: 'string' },
       image: { type: 'string' },
     },
@@ -41,12 +44,15 @@ async function main() {
   let provider;
   if (values.mock) {
     provider = createMockProvider();
+  } else if (values.local) {
+    provider = createLocalLlmProvider({ url: config.localLlmUrl });
   } else {
     assertEnv(['GEMINI_API_KEY', 'GEMINI_MODEL']);
     provider = createGeminiProvider(config.gemini);
   }
 
   const store = createFileStore({ dataDir: config.dataDir });
+  const started = Date.now();
   const { draft, warnings, imageProblems } = await createDraft({
     date,
     epochDate: config.topicEpochDate,
@@ -56,6 +62,9 @@ async function main() {
     store,
   });
   printDraft({ draft, warnings, imageProblems, filePath: store.filePath });
+  const t = provider.lastTimings;
+  const speed = t ? `: prompt ${t.prompt_n} tokens at ${t.prompt_per_second?.toFixed(1)}/s, reply ${t.predicted_n} tokens at ${t.predicted_per_second?.toFixed(1)}/s` : '';
+  console.log(`Written in ${Math.round((Date.now() - started) / 1000)} s${speed}`);
 
   if (values.image && draft.infographic) {
     const png = await createInfographicRenderer().draw({ spec: draft.infographic, date: draft.date, seed: draft.id });
