@@ -45,7 +45,9 @@ async function main() {
   if (values.mock) {
     provider = createMockProvider();
   } else if (values.local) {
-    provider = createLocalLlmProvider({ url: config.localLlmUrl });
+    // Several minutes on the phone: a running count shows it's still working.
+    const onProgress = ({ pieces }) => { if (pieces % 25 === 0) process.stdout.write(`\r  ${pieces} tokens written...`); };
+    provider = createLocalLlmProvider({ url: config.localLlmUrl, onProgress });
   } else {
     assertEnv(['GEMINI_API_KEY', 'GEMINI_MODEL']);
     provider = createGeminiProvider(config.gemini);

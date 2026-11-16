@@ -40,7 +40,8 @@ if ! curl -sf "http://127.0.0.1:$PORT/health" >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Writing the draft. Expect about 5 minutes on this phone; the screen may turn off meanwhile."
+echo "Writing the draft: 5 to 10 minutes on this phone. A token count appears once the model starts"
+echo "writing (a draft is about 1,100 tokens). The screen may turn off meanwhile."
 cd "$APP_DIR"
 DATA_DIR="$TMP/linkedin-local-test" LOCAL_LLM_URL="http://127.0.0.1:$PORT" \
   node src/cli/draft.js --local ${1:+--date "$1"} --image "$IMAGE_DIR/local-draft.png"

@@ -424,5 +424,6 @@ Stop the normal bot first (409 rule). Afterwards close that window and run `npm 
   - The M30 (3 GB RAM) already runs Qwen3 1.7B via llama.cpp for the Gita project (`..\LocalLLM`, repo `tewari-d/phone-hosted-llm`, server on 8080 with a 2048 context, 5.5 tokens/s).
   - Added `draft --local` + `localLlmProvider.js` (same prompt and JSON schema via llama-server's `response_format`, thinking off) and `deploy/termux/local-draft-test.sh`.
   - Verified on the laptop against a stand-in llama-server. 107 tests.
-  - **Not yet run on the phone.** Result to record: time, quality versus Gemini on the same topic, and any memory problems.
+  - **First phone run failed with `UND_ERR_HEADERS_TIMEOUT`.** Node's `fetch` (undici) waits only 300 s for response headers, and a non-streamed llama-server reply sends none until the draft is finished. The provider now streams (`stream: true`, SSE parsing, a token counter on screen). 108 tests.
+  - Result still to record: time, quality versus Gemini on the same topic (2026-11-16: ABAP constructor expressions), and any memory problems.
 - [ ] M5: polish (log rotation, more tests as needed).
