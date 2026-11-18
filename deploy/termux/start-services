@@ -1,0 +1,5 @@
+#!/data/data/com.termux/files/usr/bin/sh
+# Termux:Boot runs this when the phone starts: keep the CPU awake, then start every enabled
+# Termux service (the bot). Installed to ~/.termux/boot/ by deploy/termux/setup.sh.
+termux-wake-lock
+. /data/data/com.termux/files/usr/etc/profile.d/start-services.sh

@@ -1,0 +1,4 @@
+#!/bin/sh
+# Blocks a commit that would publish API keys or the LinkedIn token. Enable once per clone:
+#   git config core.hooksPath .githooks
+exec node "$(git rev-parse --show-toplevel)/src/cli/checkSecrets.js"

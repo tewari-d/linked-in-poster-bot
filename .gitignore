@@ -1,0 +1,12 @@
+node_modules/
+logs/
+*.log
+dist/
+
+# Secrets: API keys, bot token, LinkedIn token. Never commit these (the pre-commit hook also checks).
+.env
+.env.*
+!.env.example
+data/state.json*
+# Phone bundles made with --with-secrets contain .env and the LinkedIn token.
+*.tgz

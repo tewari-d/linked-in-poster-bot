@@ -1,0 +1,164 @@
+{
+  "formats": [
+    { "id": "tip", "instruction": "A practical tip or trick, with one short concrete example." },
+    { "id": "mistake", "instruction": "A common mistake: what it looks like, why it happens, and how to avoid it." },
+    { "id": "before-after", "instruction": "A before/after comparison (code or approach) that shows the improvement." },
+    { "id": "explain", "instruction": "Explain the concept simply, as you would to a colleague new to the topic." },
+    { "id": "versus", "instruction": "Compare two related options (X vs Y) and say when to pick each." },
+    { "id": "checklist", "instruction": "A short checklist of 4 to 6 items the reader can apply today." },
+    { "id": "myth", "instruction": "Myth vs fact: correct one common misconception." },
+    { "id": "worth-knowing", "instruction": "One thing worth knowing that many developers miss, phrased as general practitioner advice." }
+  ],
+  "categories": [
+    {
+      "name": "ABAP",
+      "subtopics": [
+        "Inline declarations with DATA() and FIELD-SYMBOL()",
+        "Constructor expressions: VALUE, CORRESPONDING, COND and SWITCH",
+        "String templates instead of CONCATENATE",
+        "ABAP Unit: a first test class and why test seams matter",
+        "Clean ABAP: small methods, clear names, no Hungarian prefixes"
+      ]
+    },
+    {
+      "name": "CDS views & annotations",
+      "subtopics": [
+        "CDS view entities vs the older DDIC-based CDS views",
+        "Associations vs joins in CDS and when the data is actually read",
+        "Virtual data model layers: basic, composite and consumption views",
+        "Access control on CDS with DCL roles",
+        "UI annotations that drive a Fiori elements list report"
+      ]
+    },
+    {
+      "name": "RAP",
+      "subtopics": [
+        "A RAP business object in one picture: behavior definition, implementation, projection",
+        "Managed vs unmanaged RAP scenarios",
+        "Determinations vs validations in RAP: when each runs",
+        "Actions and functions in RAP",
+        "Draft handling in RAP and what it gives end users"
+      ]
+    },
+    {
+      "name": "CAP",
+      "subtopics": [
+        "CDS modeling in CAP: entities, aspects and the cuid/managed mixins",
+        "CAP event handlers: before, on and after",
+        "Developing locally with SQLite, deploying to SAP HANA Cloud",
+        "Consuming remote services such as S/4HANA OData APIs from CAP",
+        "Multitenancy in CAP: what @sap/cds-mtxs takes care of"
+      ]
+    },
+    {
+      "name": "Fiori elements / SAPUI5",
+      "subtopics": [
+        "Fiori elements vs freestyle SAPUI5: choosing the right one",
+        "Extending Fiori elements with the flexible programming model",
+        "SAPUI5 data binding: one-way, two-way and expression binding",
+        "UI5 Tooling and a modern UI5 project setup",
+        "Performance basics for SAPUI5 apps: async loading and component preload"
+      ]
+    },
+    {
+      "name": "OData",
+      "subtopics": [
+        "OData V2 vs V4: what changed and why it matters",
+        "$select, $expand and $filter: keeping payloads small",
+        "Batch requests and change sets",
+        "ETags and optimistic concurrency",
+        "Deep inserts in OData V4"
+      ]
+    },
+    {
+      "name": "SAP BTP",
+      "subtopics": [
+        "Cloud Foundry vs Kyma runtime on SAP BTP",
+        "Destinations and the Connectivity service: reaching on-premise systems",
+        "XSUAA: scopes, role templates and role collections",
+        "Global accounts, directories, subaccounts and entitlements",
+        "MTA deployment descriptors in plain words"
+      ]
+    },
+    {
+      "name": "Integration Suite",
+      "subtopics": [
+        "Cloud Integration iFlows: the main building blocks",
+        "Groovy scripts in Cloud Integration: when to use them and when not",
+        "Error handling patterns in integration flows",
+        "API Management: API proxies, policies and rate limiting",
+        "Monitoring and tracing messages in Cloud Integration"
+      ]
+    },
+    {
+      "name": "Event-driven integration",
+      "subtopics": [
+        "Events vs APIs: when event-driven integration fits",
+        "S/4HANA business events: how they are raised and consumed",
+        "Queues, topics and subscriptions in SAP Event Mesh",
+        "The CloudEvents format in SAP scenarios",
+        "SAP Integration Suite, advanced event mesh vs SAP Event Mesh"
+      ]
+    },
+    {
+      "name": "S/4HANA extensibility & clean core",
+      "subtopics": [
+        "What clean core means in practice",
+        "Key user extensibility: custom fields and custom logic",
+        "On-stack developer extensibility vs side-by-side extensions on SAP BTP",
+        "Released APIs and how to find them",
+        "Moving classic custom code towards clean core, step by step"
+      ]
+    },
+    {
+      "name": "SAP HANA",
+      "subtopics": [
+        "AMDP: running logic in SAP HANA from ABAP",
+        "SQLScript table variables and declarative logic",
+        "Calculation views vs CDS views: where each fits",
+        "Code pushdown: what belongs in the database and what does not",
+        "SAP HANA Cloud vs on-premise SAP HANA from a developer's view"
+      ]
+    },
+    {
+      "name": "Performance & troubleshooting",
+      "subtopics": [
+        "Using the SQL trace (ST05) to find the real bottleneck",
+        "ABAP runtime analysis (SAT) basics",
+        "Avoiding SELECTs in loops: FOR ALL ENTRIES vs joins",
+        "Table buffering and when it backfires",
+        "Profiling ABAP code in ABAP Development Tools"
+      ]
+    },
+    {
+      "name": "Security & authorizations",
+      "subtopics": [
+        "Authorization objects and AUTHORITY-CHECK done right",
+        "PFCG roles: single roles vs composite roles",
+        "Principal propagation from SAP BTP to on-premise systems",
+        "Securing OData services: authorizations and CSRF tokens",
+        "Never hard-code credentials: safer options on SAP BTP"
+      ]
+    },
+    {
+      "name": "SAP AI",
+      "subtopics": [
+        "SAP AI Core and SAP AI Launchpad: what each one does",
+        "The generative AI hub: using LLMs through SAP AI Core",
+        "Grounding LLM answers in your own business data",
+        "Joule for developers: where it helps and where to stay careful",
+        "Responsible AI checks before putting an LLM feature in front of users"
+      ]
+    },
+    {
+      "name": "DevOps & transports",
+      "subtopics": [
+        "abapGit vs gCTS: what each one is for",
+        "The DEV, QAS, PRD transport landscape and why order matters",
+        "CI/CD for CAP apps with SAP Continuous Integration and Delivery",
+        "ABAP Test Cockpit (ATC) checks in daily development",
+        "Code reviews for ABAP: what to look for"
+      ]
+    }
+  ]
+}
